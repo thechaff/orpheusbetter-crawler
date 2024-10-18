@@ -35,7 +35,6 @@ formats = {
     },
 }
 
-
 def allowed_transcodes(torrent):
     """Some torrent types have transcoding restrictions."""
     preemphasis = re.search(r"""pre[- ]?emphasi(s(ed)?|zed)""", torrent['remasterTitle'], flags=re.IGNORECASE)
@@ -44,14 +43,11 @@ def allowed_transcodes(torrent):
     else:
         return formats.keys()
 
-
 class LoginException(Exception):
     pass
 
-
 class RequestException(Exception):
     pass
-
 
 class WhatAPI:
     def __init__(self, username=None, password=None, endpoint=None, totp=None):
@@ -65,23 +61,21 @@ class WhatAPI:
         self.passkey = None
         self.userid = None
         self.last_request = time.time()
-        self.rate_limit = 2.0  # seconds between requests
+        self.rate_limit = 2.0 # seconds between requests
         self._login()
 
     def _login(self):
         '''Logs in user and gets authkey from server'''
         loginpage = '{0}/login.php'.format(self.endpoint)
+        params = {'act': 'twofa'}
         data = {'username': self.username,
-                'password': self.password}
-        r = self.session.post(loginpage, data=data)
+                'password': self.password,
+                'twofa': 0 }
+        if self.totp:
+            data['twofa'] = self.totp
+        r = self.session.post(loginpage, params=params, data=data)
         if r.status_code != 200:
             raise LoginException
-        if self.totp:
-            params = {'act': '2fa'}
-            data = {'2fa': self.totp}
-            r = self.session.post(loginpage, params=params, data=data)
-            if r.status_code != 200:
-                raise LoginException
         accountinfo = self.request('index')
         self.authkey = accountinfo['authkey']
         self.passkey = accountinfo['passkey']
@@ -125,7 +119,7 @@ class WhatAPI:
         r = self.session.get(ajaxpage, params=kwargs, allow_redirects=False)
         self.last_request = time.time()
         return r.content
-
+    
     def get_artist(self, id=None, format='MP3', best_seeded=True):
         res = self.request('artist', id=id)
         torrentgroups = res['torrentgroup']
@@ -173,8 +167,7 @@ class WhatAPI:
         else:
             media_params = ['&media={0}'.format(media_search_map[m]) for m in media]
 
-        pattern = re.compile(r'reportsv2\.php\?action=report&amp;id=(\d+)".*?torrents\.php\?id=(\d+)"',
-                             re.MULTILINE | re.IGNORECASE | re.DOTALL)
+        pattern = re.compile(r'reportsv2\.php\?action=report&amp;id=(\d+)".*?torrents\.php\?id=(\d+)"', re.MULTILINE | re.IGNORECASE | re.DOTALL)
         if mode == 'snatched' or mode == 'both' or mode == 'all':
             url = '{0}/torrents.php?type=snatched&userid={1}&format=FLAC'.format(self.endpoint, self.userid)
             for mp in media_params:
@@ -266,16 +259,13 @@ class WhatAPI:
         self.last_request = time.time()
 
     def release_url(self, group, torrent):
-        return '{0}/torrents.php?id={1}&torrentid={2}#torrent{3}'.format(self.endpoint, group['group']['id'],
-                                                                         torrent['id'], torrent['id'])
+        return '{0}/torrents.php?id={1}&torrentid={2}#torrent{3}'.format(self.endpoint, group['group']['id'], torrent['id'], torrent['id'])
 
     def permalink(self, torrent):
         return '{0}/torrents.php?torrentid={1}'.format(self.endpoint, torrent['id'])
 
     def get_better(self, type=3):
-        p = re.compile(
-            r'(torrents\.php\?action=download&(?:amp;)?id=(\d+)[^"]*).*(torrents\.php\?id=\d+(?:&amp;|&)torrentid=\2\#torrent\d+)',
-            re.DOTALL)
+        p = re.compile(r'(torrents\.php\?action=download&(?:amp;)?id=(\d+)[^"]*).*(torrents\.php\?id=\d+(?:&amp;|&)torrentid=\2\#torrent\d+)', re.DOTALL)
         out = []
         data = self.request_html('better.php', method='transcode', type=type)
         for torrent, id, perma in p.findall(data):
@@ -305,7 +295,6 @@ class WhatAPI:
 
     def get_torrent_info(self, id):
         return self.request('torrent', id=id)['torrent']
-
 
 def unescape(text):
     return html.unescape(text)
